@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Will you be my Valentine?</title>
+	<style>
+		:root{--bg:#fff0f6;--card:#fff;--accent:#ff6b8a;--muted:#6b6b6b}
+		html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+		body{display:grid;place-items:center;background:linear-gradient(180deg,#ffeef3 0%, #fff0f6 60%);}
+		.card{width:92%;max-width:540px;background:var(--card);border-radius:18px;padding:36px 28px;box-shadow:0 12px 30px rgba(0,0,0,0.08);text-align:center;position:relative;overflow:hidden}
+		h1{margin:0 0 6px;font-size:28px;color:#222}
+		p.lead{margin:0 0 18px;color:var(--muted)}
+		.buttons{display:flex;gap:16px;justify-content:center;align-items:center;margin-top:22px}
+		button{appearance:none;border:0;padding:12px 22px;border-radius:999px;font-weight:600;cursor:pointer;font-size:16px}
+		.yes{background:linear-gradient(90deg,#ff8aa1,#ff5f87);color:white;box-shadow:0 6px 18px rgba(255,100,130,0.28)}
+		.no{background:#fff;border:2px solid #ffd5dd;color:#ff5470;position:relative}
+		/* container for moving no button */
+		.playground{position:relative;height:160px;margin-top:8px}
+		.no-wrap{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+		.hint{font-size:13px;color:#9b9b9b;margin-top:10px}
+
+		/* overlay when accepted */
+		.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);opacity:0;pointer-events:none;transition:opacity .28s}
+		.overlay.show{opacity:1;pointer-events:auto}
+		.modal{background:white;padding:28px 32px;border-radius:14px;text-align:center;max-width:90%;box-shadow:0 18px 50px rgba(0,0,0,0.28)}
+		.modal h2{margin:0 0 8px;color:var(--accent)}
+		.modal p{margin:0 0 14px}
+
+		/* hearts animation */
+		.heart{position:absolute;left:50%;top:60%;transform:translate(-50%,-50%) scale(0);width:20px;height:20px;pointer-events:none}
+		.heart:before,.heart:after{content:'';position:absolute;width:12px;height:20px;background:var(--accent);border-radius:12px 12px 0 0;transform:rotate(-45deg);top:0;left:4px}
+		.heart:after{transform:rotate(45deg);left:-4px}
+		@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(0.9)}100%{opacity:0;transform:translateY(-220px) scale(1.2)}}
+		.heart.animate{animation:floatUp 1400ms cubic-bezier(.2,.8,.2,1) forwards}
+
+		/* subtle pulse */
+		.pulse{display:inline-block;animation:pulse 1200ms ease-in-out infinite}
+		@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+		@media (max-width:420px){.card{padding:22px}}
+	</style>
+</head>
+<body>
+	<div class="card" role="main" aria-labelledby="title">
+		<h1 id="title">Will you be my Valentine?</h1>
+		<p class="lead">I made this for you. Pick one.</p>
+
+		<div class="playground" id="playground" aria-hidden="false">
+			<div class="buttons" aria-hidden="true">
+				<button class="yes" id="yesBtn">Yes, of course <span class="pulse">💘</span></button>
+			</div>
+
+			<div class="no-wrap" id="noWrap">
+				<button class="no" id="noBtn" aria-label="No button">No</button>
+			</div>
+		</div>
+
+		<div class="hint">Try to click No if you're brave — it might run away.</div>
+	</div>
+
+	<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-hidden="true">
+		<div class="modal" id="modal">
+			<h2>Yay! 💖</h2>
+			<p>You're the sweetest. Happy Valentine's Day!</p>
+			<button id="closeBtn" class="yes">Close</button>
+		</div>
+	</div>
+
+	<script>
+		(function(){
+			const playground = document.getElementById('playground');
+			const noBtn = document.getElementById('noBtn');
+			const noWrap = document.getElementById('noWrap');
+			const yesBtn = document.getElementById('yesBtn');
+			const overlay = document.getElementById('overlay');
+			const closeBtn = document.getElementById('closeBtn');
+
+			// Ensure the noWrap is positioned within playground bounds
+			function placeAt(x, y){
+				// keep within playground
+				const pad = 10;
+				const rect = playground.getBoundingClientRect();
+				const w = noWrap.offsetWidth, h = noWrap.offsetHeight;
+				let left = x - rect.left - w/2;
+				let top = y - rect.top - h/2;
+				left = Math.max(pad, Math.min(left, rect.width - w - pad));
+				top = Math.max(pad, Math.min(top, rect.height - h - pad));
+				noWrap.style.left = left + 'px';
+				noWrap.style.top = top + 'px';
+			}
+
+			// Initially center
+			function centerNo(){
+				const rect = playground.getBoundingClientRect();
+				noWrap.style.left = (rect.width/2 - noWrap.offsetWidth/2) + 'px';
+				noWrap.style.top = (rect.height/2 - noWrap.offsetHeight/2) + 'px';
+			}
+
+			// Move to a random safe spot away from the cursor and the Yes button
+			function moveNoAwayFrom(mx, my){
+				const rect = playground.getBoundingClientRect();
+				const yesRect = yesBtn.getBoundingClientRect();
+				const attempts = 24;
+				for(let i=0;i<attempts;i++){
+					const lx = Math.random()*(rect.width - noWrap.offsetWidth - 20) + 10;
+					const ty = Math.random()*(rect.height - noWrap.offsetHeight - 20) + 10;
+					const cx = rect.left + lx + noWrap.offsetWidth/2;
+					const cy = rect.top + ty + noWrap.offsetHeight/2;
+					const dCursor = Math.hypot(cx - mx, cy - my);
+					const dYes = Math.hypot(cx - (yesRect.left + yesRect.width/2), cy - (yesRect.top + yesRect.height/2));
+					if(dCursor > 140 && dYes > 90){
+						noWrap.style.left = lx + 'px';
+						noWrap.style.top = ty + 'px';
+						return;
+					}
+				}
+				// fallback: jitter
+				const curL = parseFloat(getComputedStyle(noWrap).left) || 0;
+				const curT = parseFloat(getComputedStyle(noWrap).top) || 0;
+				noWrap.style.left = Math.max(8, Math.min(rect.width - noWrap.offsetWidth - 8, curL + (Math.random()*160-80))) + 'px';
+				noWrap.style.top = Math.max(8, Math.min(rect.height - noWrap.offsetHeight - 8, curT + (Math.random()*160-80))) + 'px';
+			}
+
+			// When mouse moves in playground, if cursor gets near the no button, move it
+			playground.addEventListener('mousemove', (e)=>{
+				const btnRect = noWrap.getBoundingClientRect();
+				const cx = btnRect.left + btnRect.width/2;
+				const cy = btnRect.top + btnRect.height/2;
+				const d = Math.hypot(e.clientX - cx, e.clientY - cy);
+				if(d < 120) moveNoAwayFrom(e.clientX, e.clientY);
+			});
+
+			// Also respond to touchstart so mobile users can't easily tap
+			playground.addEventListener('touchstart', (e)=>{
+				const t = e.touches[0];
+				moveNoAwayFrom(t.clientX, t.clientY);
+			}, {passive:true});
+
+			// If the user tries to click the No button, block it and move
+			noBtn.addEventListener('click', (ev)=>{
+				ev.preventDefault();
+				ev.stopPropagation();
+				const x = ev.clientX || (window.innerWidth/2);
+				const y = ev.clientY || (window.innerHeight/2);
+				moveNoAwayFrom(x,y);
+			});
+
+			// If they try keyboard, move as well
+			noBtn.addEventListener('focus', ()=>{
+				const rect = playground.getBoundingClientRect();
+				moveNoAwayFrom(rect.left + rect.width/2, rect.top + rect.height/2);
+				noBtn.blur();
+			});
+
+			// Handle Yes click: show overlay and hearts
+			function spawnHearts(count){
+				for(let i=0;i<count;i++){
+					const h = document.createElement('div');
+					h.className = 'heart';
+					const size = 12 + Math.random()*26;
+					h.style.width = size + 'px';
+					h.style.height = size + 'px';
+					const left = 50 + (Math.random()*160-80);
+					h.style.left = left + '%';
+					h.style.top = (50 + (Math.random()*40-20)) + '%';
+					document.body.appendChild(h);
+					// Force layout then add class to animate
+					requestAnimationFrame(()=>{
+						h.classList.add('animate');
+					});
+					// remove after animation
+					setTimeout(()=>h.remove(), 1600 + Math.random()*800);
+				}
+			}
+
+			yesBtn.addEventListener('click', ()=>{
+				overlay.classList.add('show');
+				overlay.setAttribute('aria-hidden','false');
+				spawnHearts(18);
+			});
+
+			closeBtn.addEventListener('click', ()=>{
+				overlay.classList.remove('show');
+				overlay.setAttribute('aria-hidden','true');
+			});
+
+			// On resize, recenter the no button
+			window.addEventListener('resize', centerNo);
+			// initial layout after DOM paints
+			requestAnimationFrame(centerNo);
+		})();
+	</script>
+</body>
+</html>
